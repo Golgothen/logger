@@ -1,59 +1,107 @@
 import logging, logging.handlers, logging.config, os
 
-from multiprocessing import Process, Queue, Pipe
+from multiprocessing import Process, Queue, Pipe, Event
 from threading import Thread
 
 #from pipewatcher import PipeWatcher
 
 from time import sleep
 
+logger = logging.getLogger('root')
+
+class LogListener(Process):
+
+    def __init__(self, log_queue, stop_event):
+        super(LogListener, self).__init__()
+        self.logQueue = q
+        self.stop_event = stop_event
+
+    def run(self):
+
+        logger_config = {
+            'version': 1,
+            'disable_existing_loggers': True,
+            'formatters': {
+                'detailed': {
+                    'class': 'logging.Formatter',
+                    'format': '%(asctime)-16s:%(levelname)-8s[%(module)-12s.%(funcName)-20s:%(lineno)-5s] %(message)s'
+                },
+                'brief': {
+                    'class': 'logging.Formatter',
+                    'format': '%(message)s'
+                }
+            },
+            'handlers': {
+                'colsole': {
+                    'class': 'logging.StreamHandler',
+                    'level': 'INFO',
+                    'formatter' : 'brief',
+                },
+                'file' : {
+                    'class': 'logging.FileHandler',
+                    'filename': 'debug.log',
+                    'mode': 'w',
+                    'formatter': 'detailed',
+                    'level': 'DEBUG',
+                },
+            'loggers': {
+                'root': {
+                    'handlers': ['console', 'file']
+                },
+            }
+
+        logging.config.dictConfig(logger_config)
+        listener = logging.handlers.QueueListener(self.logQueue)
+        listener.start()
+        logger = logging.getLogger('root')
+        stop_even.wait()
+        listener.stop()
+
 
 class TestProc(Process):
-    def __init__(self, comms, name, q, config):
+    def __init__(self, comms, name):
         super(TestProc, self).__init__()
         self.name = name
-        self.__pipe = PipeWatcher(self, comms, self.name, q, config)
+        self.__pipe = PipeWatcher(self, comms, self.name)
         self.running = False
-        self.logger = lgging.config.dictConfig(config)
 
     def run(self):
         self.__pid = os.getpid()
         self.running = True
         while self.running:
-            self.logger.info('Sample message from process {}'.format(self.__pid))
+            logger.info('Sample message from process {}'.format(self.__pid))
             sleep(1)
-        self.logger.info('Process {} exiting'.format(self.pid))
+        logger.info('Process {} exiting'.format(self.pid))
 
     def stop(self, p):
         self.running = False
 
 class PipeWatcher(Thread):
 
-    def __init__(self, parent, pipe, name, q, config):
+    def __init__(self, parent, pipe, name):
         super(PipeWatcher, self).__init__()
         self.__pipe = pipe
         self.__parent = parent
         self.__running = False
         self.name = name
         self.daemon = True
-        self.logger = self.logging.config.dictConfig(config)
 
     def run(self):
         self.__running = True
-        self.logger.info('Starting listener thread {}'.format(self.name))
+        logger.info('Starting listener thread {}'.format(self.name))
         try:
             while self.__running:
                 while self.__pipe.poll(None):  # Block indefinately waiting for a message
                     m = self.__pipe.recv()
-                    self.logger.info('{} {} with {}'.format(self.name, m.message, m.params))
+                    logger.info('{} {} with {}'.format(self.name, m.message, m.params))
                     response = getattr(self.__parent, m.message.lower())(m.params)
                     if response is not None:
-                        self.logger.debug('{} response.'.format(response.message))
+                        logger.debug('{} response.'.format(response.message))
                         self.send(response)
         except (KeyboardInterrupt, SystemExit):
             self.__running = False
         except:
-            self.logger.critical('Unhandled exception occured in PipeWatcher thread {}: {}'.format(self.name, sys.exc_info))
+            logger.critical('Unhandled exception occured in PipeWatcher thread {}: {}'.format(self.name, sys.exc_info))
 
     # Public method to allow the parent to send messages to the pipe
     def send(self, msg):
@@ -65,44 +113,45 @@ class Message():
         self.params = dict()
         for k in kwargs:
             self.params[k] = kwargs[k]
-        #logger.debug('Message: {} : {}'.format(self.message, self.params))
+        logger.debug('Message: {} : {}'.format(self.message, self.params))
 
 if __name__ == '__main__':
     q = Queue()
+    e = Event()
+    log = LogListener(q, e)
+    log.start()
 
-    worker_config = {'version': 1,
-                     'disable_existing_loggers': True,
-                     'handlers':
-                        {'queue':
-                            {'class': 'logging.handlers.QueueHandler',
-                             'queue': q,
-                            },
-                        },
-                     'root':
-                         {'level': 'DEBUG',
-                          'handlers': ['queue']
-                         },
-                    }
+    logger_config = {
+        'version': 1,
+        'disable-existing_loggers': True,
+        'handlers': {
+            'queue': {
+                'class': 'logging.handlers.QueueHandler',
+                'queue': q,
+            },
+        },
+        'root' : {
+            'level': 'DEBUG',
+            'handlers': ['queue']
+        },
+    }
 
-
-
+    logging.config.dictConfig(logger_config)
     logger = logging.getLogger('root')
-
-    #logName = (datetime.now().strftime('RUN%Y%m%d')+'.log')
-    handler = logging.StreamHandler() # sends output to stderr
-    #file_handler = logging.FileHandler('./'+logName) # sends output to file
-    handler.setFormatter(logging.Formatter('%(asctime)-16s:%(levelname)-8s[%(module)-12s.%(funcName)-20s:%(lineno)-5s] %(message)s'))
-    listener = logging.handlers.QueueListener(q)
-    listener.start()
 
     procs = []
     for a in range(5):
         snd, rcv = Pipe()
-        procs[a] = {'PROCESS' : TestProc(rcv, 'Test Process {}'.format(a), q, worker_config), 'PIPE' : snd }
+        wp = {}
+        wp['PROCESS'] = TestProc(snd, 'Test Process {}'.format(a))
+        wp['PIPE'] = rcv
+        procs.append(wp)
         sleep(0.1)
-        procs[a]['PROCESS'].start()
+        wp['PROCESS'].start()
 
     sleep(10)
     for p in procs:
         procs[p]['PIPE'].send(Message('STOP'))
-
+        procs[p]['PROCESS'].join()
+    e.set()
+    log.join()
