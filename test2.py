@@ -48,9 +48,9 @@ class TestProc(Process):
         while self.running:
             while self.running and not self.paused:
                 logger.info('Sample message from process {} on PID {}'.format(self.name, self.__pid))
-                sleep(0.001)
+                sleep(0.1)
             logger.info('Process {} paused'.format(self.name))
-            sleep(1)
+            sleep(0.5)
         logger.info('Process {} exiting'.format(self.name))
 
     def stop(self, p = None):
@@ -112,7 +112,7 @@ class Message():
 
 if __name__ == '__main__':
 
-    proc_count = 200
+    proc_count = 50
 
     procs = []
     for a in range(proc_count):
@@ -141,4 +141,5 @@ if __name__ == '__main__':
     sleep(2)
     for a in range(proc_count):
         procs[a]['STOP'].set()
+    for a in range(proc_count):
         procs[a]['PROCESS'].join()
