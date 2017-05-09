@@ -88,9 +88,7 @@ if __name__ == '__main__':
                         }
              }
 
-
     logQueue = Queue()
-
     listener = LogListener(logQueue, config)
     listener.start()
 
@@ -101,7 +99,7 @@ if __name__ == '__main__':
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
 
-    proc_count = 10
+    proc_count = 200
 
     procs = []
     for a in range(proc_count):
@@ -115,6 +113,7 @@ if __name__ == '__main__':
         wp['RESUME'] = resume_event
         procs.append(wp)
         wp['PROCESS'].start()
+        sleep(0.01)
 
     sleep(2)
     for a in range(proc_count):
@@ -130,5 +129,5 @@ if __name__ == '__main__':
     for a in range(proc_count):
         procs[a]['PROCESS'].join()
 
-    logQueue.put(None)
-
+    listener.stop()
+    listener.join()

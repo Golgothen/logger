@@ -1,27 +1,14 @@
 from multiprocessing import Queue, Process
+
 import logging, logging.handlers, logging.config
 
-
 class QueueHandler(logging.Handler):
-    """
-    This is a logging handler which sends events to a multiprocessing queue.
-
-    The plan is to add it to Python 3.2, but this can be copy pasted into
-    user code for use with earlier Python versions.
-    """
 
     def __init__(self, queue):
-        """
-        Initialise an instance, using the passed queue.
-        """
         logging.Handler.__init__(self)
         self.queue = queue
 
     def emit(self, record):
-        """
-        Emit a record.
-        Writes the LogRecord to the queue.
-        """
         try:
             ei = record.exc_info
             if ei:
@@ -44,7 +31,7 @@ class LogListener(Process):
     def run(self):
         logging.config.dictConfig(self.config)
         root = logging.getLogger()
-
+        self.running = True
         while True:
             try:
                 record = self.__queue.get()
@@ -56,6 +43,8 @@ class LogListener(Process):
                 raise
             except:
                 import sys, traceback
-                print >> stderr, 'Error in logging process!'
+                print >> sys.stderr, 'Error in logging process!'
                 traceback.print_exc(file=sys.stderr)
 
+    def stop(self):
+        self.__queue.put(None)
