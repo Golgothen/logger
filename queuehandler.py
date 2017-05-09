@@ -1,5 +1,5 @@
 from multiprocessing import Queue, Process
-import logging, logging.handlers
+import logging, logging.handlers, logging.config
 
 
 class QueueHandler(logging.Handler):
@@ -33,27 +33,29 @@ class QueueHandler(logging.Handler):
         except:
             self.handleError(record)
 
-#class LogListener(Process):
-#    def __init__(self, queue):
-#        super(LogListener, self).__init__()
-#        self.__queue = queue
+class LogListener(Process):
 
-def logListener():
-    root = logging.getLogger()
-    root.handlers = []
-    #root.addHandler(logging.FileHandler('test.log'))
-    root.addHandler(logging.StreamHandler())
-    while True:
-        try:
-            record = self.__queue.get()
-            if record is None:
-                break
-            logger = logging.getLogger(record.name)
-            logger.handle(record)
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
-            import sys, traceback
-            print >> stderr, 'Error in logging process!'
-            traceback.print_exc(file=sys.stderr)
+    def __init__(self, queue, config):
+        super(LogListener, self).__init__()
+        self.__queue = queue
+        self.deamon = True
+        self.config = config
+
+    def run(self):
+        logging.config.dictConfig(self.config)
+        root = logging.getLogger()
+
+        while True:
+            try:
+                record = self.__queue.get()
+                if record is None:
+                    break
+                logger = logging.getLogger(record.name)
+                logger.handle(record)
+            except (KeyboardInterrupt, SystemExit):
+                raise
+            except:
+                import sys, traceback
+                print >> stderr, 'Error in logging process!'
+                traceback.print_exc(file=sys.stderr)
 

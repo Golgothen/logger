@@ -1,57 +1,7 @@
-import logging, logging.handlers , _thread
-
-from multiprocessing import Queue, Event, Process
-#from threading import Thread
+from multiprocessing import Event, Process, Queue
 from time import sleep
-
-def logListener(queue):
-    root = logging.getLogger()
-    root.addHandler(logging.FileHandler('test.log'))
-    #root.addHandler(logging.StreamHandler())
-    while True:
-        try:
-            record = queue.get()
-            if record is None:
-                break
-            logger = logging.getLogger(record.name)
-            logger.handle(record)
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
-            import sys, traceback
-            print >> stderr, 'Error in logging process!'
-            traceback.print_exc(file=sys.stderr)
-
-class QueueHandler(logging.Handler):
-    """
-    This is a logging handler which sends events to a multiprocessing queue.
-
-    The plan is to add it to Python 3.2, but this can be copy pasted into
-    user code for use with earlier Python versions.
-    """
-
-    def __init__(self, queue):
-        """
-        Initialise an instance, using the passed queue.
-        """
-        logging.Handler.__init__(self)
-        self.queue = queue
-
-    def emit(self, record):
-        """
-        Emit a record.
-        Writes the LogRecord to the queue.
-        """
-        try:
-            ei = record.exc_info
-            if ei:
-                dummy = self.format(record) # just to get traceback text into record.exc_text
-                record.exc_info = None  # not needed any more
-            self.queue.put_nowait(record)
-        except (KeyboardInterrupt, SystemExit):
-            raise
-        except:
-            self.handleError(record)
+from queuehandler import LogListener, QueueHandler
+import logging, _thread
 
 
 class TestProc(Process):
@@ -104,24 +54,54 @@ class TestProc(Process):
 
 if __name__ == '__main__':
 
+    config = {
+             'version': 1,
+             'disable_existing_loggers': True,
+             'formatters': {
+                           'detailed': {
+                                       'class': 'logging.Formatter',
+                                       'format': '%(asctime)-16s:%(levelname)-8s[%(module)-12s.%(funcName)-20s:%(lineno)-5s] %(message)s'
+                                       },
+                           'brief': {
+                                    'class': 'logging.Formatter',
+                                    'format': '%(asctime)-16s: %(message)s'
+                                    }
+                           },
+             'handlers': {
+                         'console': {
+                                    'class': 'logging.StreamHandler',
+                                    'level': 'INFO',
+                                    'formatter': 'brief'
+                                    },
+                         'file': {
+                                 'class': 'logging.FileHandler',
+                                 'filename': 'test.log',
+                                 'mode': 'w',
+                                 'formatter': 'detailed',
+                                 'level': 'DEBUG'
+                                 }
+                         },
+             'loggers': {
+                        'root': {
+                                'handlers': ['console', 'file']
+                                },
+                        }
+             }
 
-    logger = logging.getLogger('root')
-    logger.handlers = []
 
     logQueue = Queue()
 
-    logger.addHandler(logging.StreamHandler()) # screen output for testing
+    listener = LogListener(logQueue, config)
+    listener.start()
+
+    logger = logging.getLogger('root')
+
+
     handler = QueueHandler(logQueue)
     logger.addHandler(handler)
     logger.setLevel(logging.DEBUG)
 
-
-
-    #_thread.start_new_thread(logListener,(logQueue,))    # <---- Enabling this thread seems to cause the issue
-
-
-
-    proc_count = 1
+    proc_count = 10
 
     procs = []
     for a in range(proc_count):
@@ -149,3 +129,6 @@ if __name__ == '__main__':
         procs[a]['STOP'].set()
     for a in range(proc_count):
         procs[a]['PROCESS'].join()
+
+    logQueue.put(None)
+
