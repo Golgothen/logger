@@ -50,14 +50,26 @@ log_config = {
             'mode': 'w',
             'formatter': 'detailed',
             'level': 'DEBUG'
+        },
+        'queue': {
+            'class': 'logging.handlers.QueueHandler',
+            'queue': logQueue
+        },
+    },
+    #'root': {
+    #    'handlers': ['file']
+    #},
+    'loggers': {
+        'project': {
+            'handlers': ['console', 'file'],
+            'level': 'DEBUG',
+        },
+        'listener': {
+            'handlers': ['queue'],
+            'level': 'DEBUG',
+        },
+        'project.TP2': {
+            'level': 'INFO',
         }
-    },
-    'root': {
-        'handlers': ['file']
-    },
-    #'loggers': {
-    #    'TP2': {
-    #        'level': 'INFO',
-    #    }
-    #}
+    }
 }
