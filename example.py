@@ -1,4 +1,4 @@
-from multiprocessing import Queue, Event
+from multiprocessing import Process, Queue, Event
 from time import sleep
 from proc import TestProc
 
@@ -9,15 +9,17 @@ import _thread
 
 from general import *
 
+lp = LogListener(log_config)
+lp.start()
+
 
 if __name__ == '__main__':
 
-    logging.config.dictConfig(log_config)
-    listener = logging.handlers.QueueListener(logQueue, MyHandler())
-    listener.start()
-
+    logging.config.dictConfig(worker_config)
     logger = logging.getLogger()
-    print(logger)
+
+    logger.info('Logging initialised')
+    logger.info('Listener started')
 
     proc_count = 10
 
@@ -40,18 +42,21 @@ if __name__ == '__main__':
         sleep(0.01)
 
     sleep(2)
+    logger.info('Pausing processes')
     for a in range(proc_count):
         procs[a]['PAUSE'].set()
 
     sleep(2)
+    logger.info('Resuming processes')
     for a in range(proc_count):
         procs[a]['RESUME'].set()
 
     sleep(2)
+    logger.info('Stopping processes')
     for a in range(proc_count):
         procs[a]['STOP'].set()
     for a in range(proc_count):
         procs[a]['PROCESS'].join()
 
-    listener.stop()
-    #listener.join()
+    lp.stop()
+    lp.join()

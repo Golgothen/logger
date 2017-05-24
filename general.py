@@ -1,13 +1,32 @@
-from multiprocessing import Queue
+from multiprocessing import Process, Queue, Event, current_process
 
 import logging
 
+logQueue = Queue()
+
 class MyHandler(object):
     def handle(self, record):
-        #print(record)
-        logging.getLogger(record.name).handle(record)
+        #print(record.name)
+        logger = logging.getLogger(record.name)
+        record.processName = '%s (for %s)' % (current_process().name, record.processName)
+        logger.handle(record)
 
-logQueue = Queue()
+class LogListener(Process):
+    def __init__(self, config):
+        super(LogListener, self).__init__()
+        self.stop_event = Event()
+        self.config = config
+        self.name = 'listener'
+
+    def run(self):
+        logging.config.dictConfig(self.config)
+        listener = logging.handlers.QueueListener(logQueue, MyHandler())
+        listener.start()
+        self.stop_event.wait()
+        listener.stop()
+
+    def stop(self):
+        self.stop_event.set()
 
 worker_config = {
     'version': 1,
@@ -16,6 +35,11 @@ worker_config = {
         'queue': {
             'class': 'logging.handlers.QueueHandler',
             'queue': logQueue
+        },
+    },
+    'loggers': {
+        'TP2': {
+            'level': 'INFO',
         },
     },
     'root': {
@@ -27,7 +51,7 @@ worker_config = {
 log_config = {
     'version': 1,
     'disable_existing_loggers': True,
-    #'respect_handler_level': True,
+    'respect_handler_level': True,
     'formatters': {
         'detailed': {
             'class': 'logging.Formatter',
@@ -41,7 +65,7 @@ log_config = {
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
-            'level': 'DEBUG',
+            'level': 'ERROR',
             'formatter': 'brief'
         },
         'file': {
@@ -51,25 +75,10 @@ log_config = {
             'formatter': 'detailed',
             'level': 'DEBUG'
         },
-        'queue': {
-            'class': 'logging.handlers.QueueHandler',
-            'queue': logQueue
-        },
     },
-    #'root': {
-    #    'handlers': ['file']
-    #},
-    'loggers': {
-        'project': {
-            'handlers': ['console', 'file'],
-            'level': 'DEBUG',
-        },
-        'listener': {
-            'handlers': ['queue'],
-            'level': 'DEBUG',
-        },
-        'project.TP2': {
-            'level': 'INFO',
-        }
-    }
+    'root': {
+        'handlers': ['file', 'console'],
+        'level': 'INFO'
+    },
 }
+

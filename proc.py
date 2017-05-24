@@ -18,8 +18,6 @@ class TestProc(Process):
                 self.__resume_event = kwargs[k]
             if k == 'PAUSE':
                 self.__pause_event = kwargs[k]
-            if k == 'CONFIG':
-                self.__config = kwargs[k]
 
         self.running = False
         self.paused = False
@@ -28,7 +26,7 @@ class TestProc(Process):
         logging.config.dictConfig(worker_config)      # Load worker_config from general.py
         logname = self.name.split(' ')
         logname = logname[0][:1] + logname[1][:1] + logname[2][:1]
-        logger = logging.getLogger('project.' + logname)         # create a logger with the process name as the logger name
+        logger = logging.getLogger(logname)         # create a logger with the process name as the logger name
         print('{}, {}'.format(logger, logger.name ))
         _thread.start_new_thread(self.stop,())
         _thread.start_new_thread(self.pause,())
@@ -40,7 +38,7 @@ class TestProc(Process):
             while self.running and not self.paused:
                 logger.debug('Sample message from process {} on PID {}'.format(self.name, self.pid))
                 sleep(1)
-            logger.info('Process {} paused'.format(self.name))
+            if self.paused: logger.info('Process {} paused'.format(self.name))
             sleep(0.5)
         logger.info('Process {} exiting'.format(self.name))
 
